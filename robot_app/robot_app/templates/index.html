@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Robot Admin System (Full Ver)</title>
+    <style>
+        /* --- [기본 설정] --- */
+        * { box-sizing: border-box; user-select: none; -webkit-user-drag: none; }
+        body { margin: 0; padding: 0; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f4f6f9; overflow: hidden; width: 100vw; height: 100vh; display: flex; }
+
+        /* --- [좌측 사이드바 GNB] --- */
+        .sidebar { width: 260px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1); z-index: 10; }
+        .logo-area { height: 80px; display: flex; align-items: center; padding-left: 25px; font-size: 22px; font-weight: 800; background-color: #1a252f; letter-spacing: 1px; }
+        .menu-list { flex: 1; padding-top: 20px; }
+        .menu-item { padding: 22px 25px; font-size: 19px; cursor: pointer; border-left: 6px solid transparent; transition: all 0.2s; color: #bdc3c7; display: flex; align-items: center; gap: 10px; }
+        .menu-item:hover { background-color: #34495e; color: white; }
+        .menu-item.active { background-color: #34495e; border-left-color: #3498db; color: white; font-weight: bold; }
+        .robot-status { background-color: #1a252f; padding: 20px; font-size: 14px; color: #95a5a6; }
+        .status-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+
+        /* --- [우측 메인 컨텐츠] --- */
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; }
+        header { height: 70px; background: white; display: flex; align-items: center; justify-content: space-between; padding: 0 30px; border-bottom: 1px solid #dcdcdc; }
+        .clock { font-size: 20px; font-weight: 700; color: #2c3e50; }
+        .stop-btn { background: #e74c3c; color: white; border: none; padding: 10px 25px; font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 0 #c0392b; }
+        .stop-btn:active { transform: translateY(4px); box-shadow: none; }
+        
+        .content-area { flex: 1; padding: 30px; display: none; overflow-y: auto; }
+        .content-area.active { display: block; animation: fadein 0.3s; }
+        @keyframes fadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        h2 { margin-top: 0; margin-bottom: 20px; color: #2c3e50; border-bottom: 3px solid #3498db; display: inline-block; padding-bottom: 5px; }
+
+        /* --- [UI 컴포넌트 스타일] --- */
+        .btn { border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-dark { background: #34495e; color: white; }
+
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); }
+        th { background: #ecf0f1; color: #7f8c8d; padding: 18px; text-align: left; font-size: 16px; }
+        td { padding: 18px; border-bottom: 1px solid #eee; font-size: 18px; color: #2c3e50; }
+        .badge { padding: 6px 10px; border-radius: 6px; font-size: 14px; color: white; display: inline-block; }
+
+        /* --- [Tab 2: 히트맵 2x2 서가 레이아웃] --- */
+        .heatmap-container { display: flex; gap: 30px; height: auto; min-height: 550px; }
+        .zone-list { flex: 1; display: flex; flex-direction: column; gap: 15px; max-width: 300px; }
+        .zone-item { padding: 25px; background: white; border: 2px solid #ddd; border-radius: 10px; font-size: 20px; font-weight: bold; color: #7f8c8d; cursor: pointer; }
+        .zone-item.selected { border-color: #3498db; background: #eaf2f8; color: #2c3e50; }
+        
+        .map-view { flex: 2; background: white; border-radius: 15px; border: 1px solid #ddd; padding: 20px; position: relative; display: flex; flex-direction: column; }
+        
+        /* 4구역 분할 그리드 */
+        .bookshelf-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; padding-bottom: 40px; }
+        .bookshelf-section { background: #f8f9fa; padding: 15px; border-radius: 12px; border: 2px solid #ecf0f1; display: flex; flex-direction: column; }
+        .category-title { font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 15px; text-align: center; border-bottom: 2px dashed #bdc3c7; padding-bottom: 8px; }
+        
+        /* 각 구역 안의 책 4권 배열 */
+        .small-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; flex: 1; }
+        
+        .shelf { border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; flex-direction: column; font-size: 14px; min-height: 80px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); text-align: center; }
+        .shelf.safe { background-color: #2ecc71; }
+        .shelf.warn { background-color: #f1c40f; }
+        .shelf.danger { background-color: #e74c3c; }
+        .shelf.unknown { background-color: #bdc3c7; }
+
+        /* --- [Tab 4: 제어 패널] --- */
+        .control-panel { display: flex; gap: 30px; height: 100%; }
+        .camera-view { flex: 1.8; background: #000; border-radius: 12px; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .camera-view img { width: 100%; height: 100%; object-fit: contain; background-color: #111;}
+        .control-interface { flex: 1.2; display: flex; flex-direction: column; gap: 20px; }
+        .joystick-grid { background: white; padding: 20px; border-radius: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); }
+        .joy-btn { height: 70px; border-radius: 10px; border: none; background: #ecf0f1; font-size: 24px; cursor: pointer; }
+        .joy-btn:active { background: #bdc3c7; transform: scale(0.95); }
+        .joy-btn.go { background: #3498db; color: white; }
+        .joy-btn.stop { background: #e74c3c; color: white; }
+        
+        .schedule-card { background: white; padding: 25px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); }
+        .toggle-switch { position: relative; width: 60px; height: 34px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked+.slider { background-color: #27ae60; }
+        input:checked+.slider:before { transform: translateX(26px); }
+        /* --- [Tab 5, 6: 구역 및 AGV 제어 레이아웃] --- */
+        .zone-container { display: flex; gap: 20px; margin-top: 10px; }
+        .zone-box { flex: 1; background: white; padding: 25px; border-radius: 12px; border: 2px solid #ecf0f1; box-shadow: 0 2px 10px rgba(0,0,0,0.03); }
+        .zone-title { font-size: 22px; font-weight: bold; margin-bottom: 20px; color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; display: inline-block; }
+        .goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .goal-btn { padding: 25px 15px; font-size: 20px; font-weight: bold; border-radius: 10px; border: none; cursor: pointer; background: #f8f9fa; color: #2c3e50; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .goal-btn:hover { background: #3498db; color: white; transform: translateY(-3px); box-shadow: 0 6px 12px rgba(52, 152, 219, 0.3); }
+        .goal-btn:active { transform: translateY(1px); box-shadow: none; }
+        .empty-zone { text-align: center; color: #95a5a6; padding: 60px 20px; font-size: 18px; background: #fdfdfd; border-radius: 10px; border: 2px dashed #bdc3c7; }
+    </style>
+</head>
+
+<body>
+
+    <nav class="sidebar">
+        <div class="logo-area">🤖 LIB-BOT Admin</div>
+        <div class="menu-list">
+            <div class="menu-item active" onclick="switchTab('tab1', this)"><span>🔍</span> 도서 검색</div>
+            <div class="menu-item" onclick="switchTab('tab2', this)"><span>📊</span> 재고 현황 (Live)</div>
+            <div class="menu-item" onclick="switchTab('tab3', this)"><span>⚠️</span> 이상 도서</div>
+            <div class="menu-item" onclick="switchTab('tab4', this)"><span>🎮</span> 제어 및 설정</div>
+            <div class="menu-item" onclick="switchTab('tab5', this)"><span>📚</span> 책 정리</div>
+            <div class="menu-item" onclick="switchTab('tab6', this)"><span>🗺️</span> 길 안내</div>
+        </div>
+        <div class="robot-status">
+            <div class="status-row"><span></span></div>
+            <div class="status-row"><span></span></div>
+            <div class="status-row"><span>📍 위치</span><span id="robot-loc">대기 중</span></div>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+        <header>
+            <div class="clock" id="clock">Loading...</div>
+        </header>
+
+        <main id="tab1" class="content-area active">
+            <h2>도서 위치 검색</h2>
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <input type="text" id="search-input" placeholder="도서 번호 입력 (예: 101, 204)..." onkeypress="if(event.keyCode==13) searchBook()" style="flex:1; height:60px; padding:0 20px; font-size:20px; border:2px solid #bdc3c7; border-radius:8px;">
+                <button class="btn btn-primary" onclick="searchBook()" style="width:120px; height:60px;">검색</button>
+            </div>
+            <table>
+                <thead><tr><th width="10%">No.</th><th>도서명</th><th>상태</th><th>위치</th><th>작업</th></tr></thead>
+                <tbody id="search-result-body"><tr><td colspan="5" style="text-align:center; color:#999;"></td></tr></tbody>
+            </table>
+        </main>
+
+        <main id="tab2" class="content-area">
+            <h2>실시간 서가 재고 현황</h2>
+            <div class="heatmap-container">
+                <div class="zone-list">
+                    <div class="zone-item selected">전체 서가 현황 <br><span style="font-size:14px; font-weight:normal;" id="zone-status-text">데이터 수신 중...</span></div>
+                    <div style="margin-top:auto; display:flex; flex-direction:column; gap:12px;">
+                        <button class="btn btn-success" style="width:100%; height:65px; font-size:18px;" onclick="controlRobot('start')">▶ 전체 스캔 시작</button>
+                        <button class="stop-btn" style="width:100%; height:65px; margin:0; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px;" onclick="toggleStopRobot('scanner', this)">⛔ 스캔 로봇 정지</button>
+                        <button class="btn btn-warning" style="width:100%; height:65px; margin:0; font-size:18px;" onclick="controlRobot('reset')">🔄 데이터 초기화</button>
+                    </div>
+                </div>
+                
+                <div class="map-view">
+                    <h4 style="margin:0 0 15px 0; color:#7f8c8d;">2x2 물리 서가 배치도</h4>
+                    
+                    <div class="bookshelf-layout">
+                        <div class="bookshelf-section">
+                            <div class="category-title">🎨 미술 (101~104)</div>
+                            <div id="grid-art" class="small-grid"></div>
+                        </div>
+                        <div class="bookshelf-section">
+                            <div class="category-title">📜 역사 (201~204)</div>
+                            <div id="grid-history" class="small-grid"></div>
+                        </div>
+                        <div class="bookshelf-section">
+                            <div class="category-title">📖 문학 (301~304)</div>
+                            <div id="grid-literature" class="small-grid"></div>
+                        </div>
+                        <div class="bookshelf-section">
+                            <div class="category-title">🔬 과학 (401~404)</div>
+                            <div id="grid-science" class="small-grid"></div>
+                        </div>
+                    </div>
+
+                    <div style="position:absolute; bottom:20px; right:20px; font-size:14px; color:#95a5a6; background:rgba(255,255,255,0.9); padding:5px 10px; border-radius:5px; border: 1px solid #eee;">
+                        🟢 정상 &nbsp;|&nbsp; 🔴 오류/없음 &nbsp;|&nbsp; ⚪ 미파악
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <main id="tab3" class="content-area">
+            <h2>탐지된 이상 도서 목록 (Error Log)</h2>
+            <div style="margin-bottom:15px;"><button class="btn btn-warning" style="padding:10px 20px; font-size:16px;">새로고침</button></div>
+            <table>
+                <thead><tr><th>상태</th><th>슬롯 번호</th><th>발견된 책 ID</th><th>원래 있어야 할 책</th><th>조치</th></tr></thead>
+                <tbody id="error-table-body"></tbody>
+            </table>
+        </main>
+
+        <main id="tab4" class="content-area">
+            <h2>실시간 카메라 뷰 (Live View)</h2>
+            <div class="control-panel">
+                <div class="camera-view" style="flex: 1;"> 
+                    <img src="/video_feed" alt="Camera Disconnected">
+                    <div style="position:absolute; top:15px; left:15px; background:red; color:white; padding:5px 10px; border-radius:4px; font-size:12px; font-weight:bold;">LIVE</div>
+                </div>
+            </div>
+        </main>
+        <main id="tab5" class="content-area">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column;">
+                    <h2 style="margin-bottom:5px;">📚 책 정리 작업</h2>
+                    <p style="color:#7f8c8d; font-size:16px; margin:0;">정리할 책장 구역을 선택하면 로봇(AGV)이 책을 수납할 수 있도록 이동하여 대기합니다.</p>
+                </div>
+                <button class="stop-btn" onclick="toggleStopRobot('agv', this)">⛔ AGV 비상 정지</button>
+            </div>
+            <div class="zone-container">
+                <div class="zone-box">
+                    <div class="zone-title">Zone A (메인 서가)</div>
+                    <div class="goal-grid">
+                        <button class="goal-btn" onclick="sendRobotGoal('agv', 'goal1', '1')">🎨 미술 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('agv', 'goal1', '2')">📜 역사 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('agv', 'goal1', '3')">📖 문학 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('agv', 'goal1', '4')">🔬 과학 </button>
+                    </div>
+                </div>
+                <div class="zone-box" style="display: flex; flex-direction: column;">
+                    <div class="zone-title" style="align-self: flex-start;">Zone B (확장 서가)</div>
+                    
+                    <div style="flex: 1; display: flex;">
+                        <button class="goal-btn" style="flex: 1; font-size: 32px; letter-spacing: 2px;" onclick="sendRobotGoal('agv', 'goal2', '1')">
+                            이동
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <main id="tab6" class="content-area">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; flex-direction:column;">
+                    <h2 style="margin-bottom:5px;">🗺️ 목적지 길 안내</h2>
+                    <p style="color:#7f8c8d; font-size:16px; margin:0;">안내를 원하는 책장 구역을 선택하면 로봇(AMR)이 해당 위치로 이동합니다.</p>
+                </div>
+                <button class="stop-btn" onclick="toggleStopRobot('amr', this)">⛔ AMR 비상 정지</button>
+            </div>
+            <div class="zone-container">
+                <div class="zone-box">
+                    <div class="zone-title">Zone A (메인 서가)</div>
+                    <div class="goal-grid">
+                        <button class="goal-btn" onclick="sendRobotGoal('amr', 'goal1', '1')">🎨 미술 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('amr', 'goal1', '2')">📜 역사 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('amr', 'goal1', '3')">📖 문학 </button>
+                        <button class="goal-btn" onclick="sendRobotGoal('amr', 'goal1', '4')">🔬 과학 </button>
+                    </div>
+                </div>
+                <div class="zone-box" style="display: flex; flex-direction: column;">
+                    <div class="zone-title" style="align-self: flex-start;">Zone B (확장 서가)</div>
+                    
+                    <div style="flex: 1; display: flex;">
+                        <button class="goal-btn" style="flex: 1; font-size: 32px; letter-spacing: 2px;" onclick="sendRobotGoal('amr', 'goal2', '1')">
+                            이동
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.content-area').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleDateString('ko-KR') + " " + now.toLocaleTimeString('ko-KR', { hour12: false });
+            document.getElementById('clock').innerText = timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        async function controlRobot(action) {
+            if (action === 'reset' && !confirm("모든 데이터를 초기화하시겠습니까?")) return;
+            try {
+                await fetch(`/control/${action}`, { method: 'POST' });
+                if (action === 'reset') loadInventoryData();
+                if (action === 'start') document.getElementById('robot-loc').innerText = "이동 중...";
+                if (action === 'stop') document.getElementById('robot-loc').innerText = "정지됨";
+            } catch (err) {
+                alert("명령 전송 실패!");
+            }
+        }
+
+        // [핵심] DB의 1~16번 슬롯 번호를 실제 기대하는 책 번호(예: 101, 204)로 변환하는 맵핑
+        const expectedMap = {
+            1: '101', 2: '102', 3: '103', 4: '104',
+            5: '201', 6: '202', 7: '203', 8: '204',
+            9: '301', 10: '302', 11: '303', 12: '304',
+            13: '401', 14: '402', 15: '403', 16: '404'
+        };
+
+        async function loadInventoryData() {
+            try {
+                const response = await fetch('/inventory');
+                const data = await response.json();
+
+                // 4개의 그리드를 초기화
+                const grids = {
+                    art: document.getElementById('grid-art'),
+                    history: document.getElementById('grid-history'),
+                    literature: document.getElementById('grid-literature'),
+                    science: document.getElementById('grid-science')
+                };
+                
+                Object.values(grids).forEach(grid => grid.innerHTML = '');
+
+                let okCount = 0;
+                let errCount = 0;
+                const errorBody = document.getElementById('error-table-body');
+                errorBody.innerHTML = '';
+
+                data.forEach(item => {
+                    // 1. 상태에 따른 디자인 결정
+                    let cssClass = 'unknown'; 
+                    let text = '❔';
+                    let subText = '미파악';
+
+                    if (item.status === 'ok') {
+                        cssClass = 'safe'; 
+                        text = 'OK';
+                        subText = `${item.scanned_book_id}`; // 예: SCI-101
+                        okCount++;
+                    } else if (item.status === 'err') {
+                        cssClass = 'danger'; 
+                        text = 'ERR';
+                        subText = item.scanned_book_id ? `${item.scanned_book_id}` : '비어있음';
+                        errCount++;
+                        
+                        // Tab 3 에러 로그 추가
+                        const expectedId = expectedMap[item.slot_num];
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><span class="badge" style="background:#e74c3c;">오류</span></td>
+                            <td><strong>Slot ${item.slot_num}</strong></td>
+                            <td style="color:#e74c3c; font-weight:bold;">${subText}</td>
+                            <td>${expectedId}</td>
+                            <td><button class="btn btn-dark" style="padding:5px 10px; font-size:12px;">확인 필요</button></td>
+                        `;
+                        errorBody.appendChild(tr);
+                    }
+
+                    // 2. 슬롯 UI 생성
+                    const div = document.createElement('div');
+                    div.className = `shelf ${cssClass}`;
+                    div.innerHTML = `<span style="font-size:10px; opacity:0.8">Slot ${item.slot_num}</span><br><span style="font-size:16px">${text}</span><br><span style="font-size:11px">${subText}</span>`;
+                    
+                    // 3. 번호에 따라 4개 구역으로 분배
+                    if (item.slot_num >= 1 && item.slot_num <= 4) grids.art.appendChild(div);
+                    else if (item.slot_num >= 5 && item.slot_num <= 8) grids.history.appendChild(div);
+                    else if (item.slot_num >= 9 && item.slot_num <= 12) grids.literature.appendChild(div);
+                    else if (item.slot_num >= 13 && item.slot_num <= 16) grids.science.appendChild(div);
+                });
+
+                // 구역 상태 텍스트 업데이트
+                document.getElementById('zone-status-text').innerText = `정상: ${okCount} / 오류: ${errCount} (총 ${data.length}칸)`;
+
+                if (errCount === 0) {
+                    errorBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">이상 도서가 없습니다.</td></tr>';
+                }
+
+            } catch (error) {
+                console.error("데이터 로딩 실패:", error);
+            }
+        }
+
+        setInterval(loadInventoryData, 1000);
+        loadInventoryData();
+        // --- [추가됨] 도서 검색 기능 ---
+        async function searchBook() {
+            const query = document.getElementById('search-input').value.trim();
+            const tbody = document.getElementById('search-result-body');
+            
+            if (!query) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">검색할 도서 번호를 입력해주세요.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">검색 중...</td></tr>';
+
+            try {
+                // DB의 현재 재고 현황 데이터를 가져옵니다.
+                const response = await fetch('/inventory');
+                const data = await response.json();
+                
+                // 검색어(예: "101")와 일치하는 원래 있어야 할 책 번호나, 현재 꽂혀있는 책 번호를 찾습니다.
+                const results = data.filter(item => {
+                    const expectedId = expectedMap[item.slot_num];
+                    const scannedId = item.scanned_book_id || '';
+                    return expectedId.includes(query) || scannedId.includes(query);
+                });
+
+                tbody.innerHTML = '';
+
+                if (results.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#e74c3c; font-weight:bold;">일치하는 도서가 없습니다.</td></tr>';
+                    return;
+                }
+
+                // 검색 결과 테이블 행 생성
+                results.forEach((item, index) => {
+                    const expectedId = expectedMap[item.slot_num];
+                    
+                    // 1. 구역 이름 매핑
+                    let locationStr = '';
+                    if (item.slot_num >= 1 && item.slot_num <= 4) locationStr = '🎨 미술 (2F)';
+                    else if (item.slot_num >= 5 && item.slot_num <= 8) locationStr = '📜 역사 (2F)';
+                    else if (item.slot_num >= 9 && item.slot_num <= 12) locationStr = '📖 문학 (1F)';
+                    else if (item.slot_num >= 13 && item.slot_num <= 16) locationStr = '🔬 과학 (1F)';
+                    locationStr += ` - 슬롯 ${item.slot_num}`;
+
+                    // 2. 실시간 상태 라벨링
+                    let statusHtml = '';
+                    if (item.status === 'ok') {
+                        statusHtml = '<span class="badge" style="background:#2ecc71;">정상 위치함</span>';
+                    } else if (item.status === 'err') {
+                        if (!item.scanned_book_id) {
+                            statusHtml = '<span class="badge" style="background:#95a5a6;">비어있음/분실</span>';
+                        } else {
+                            statusHtml = `<span class="badge" style="background:#e74c3c;">오배열됨 (현재 위치: ${item.scanned_book_id})</span>`;
+                        }
+                    } else {
+                        statusHtml = '<span class="badge" style="background:#f39c12;">로봇 스캔 대기중</span>';
+                    }
+
+                    // 3. 테이블에 삽입
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td style="font-weight:bold; font-size:20px; color:#2980b9;">${expectedId}</td>
+                        <td>${statusHtml}</td>
+                        <td><strong>${locationStr}</strong></td>
+                        <td><button class="btn btn-dark" style="padding:6px 12px; font-size:14px;" onclick="alert('도서 번호: ${expectedId}\\n상태: ${item.status}\\n이 책은 ${locationStr}에 배정되어 있습니다.')">상세</button></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (error) {
+                console.error("검색 실패:", error);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">서버 통신 오류가 발생했습니다.</td></tr>';
+            }
+        }
+        // --- [추가됨] AGV 이동 명령 전송 ---
+        async function sendRobotGoal(robotType, zone, targetStr) {
+            // targetStr에 따라 안내 텍스트 변경
+            let targetName = "";
+            if(targetStr === '1') targetName = "미술";
+            if(targetStr === '2') targetName = "역사";
+            if(targetStr === '3') targetName = "문학";
+            if(targetStr === '4') targetName = "과학";
+            // goal2 등에 다른 숫자가 들어올 경우 대비
+            if(!targetName) targetName = "지정 구역"; 
+
+            // 로봇 종류에 따른 알림창 텍스트 분리
+            const robotName = robotType === 'agv' ? '안내 로봇(AGV)' : '정리 로봇(AMR)';
+            const confirmMsg = `${robotName}을(를) [ ${zone} - ${targetName} ] 구역으로 이동시키겠습니까?`;
+            
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                // app.py로 로봇 종류(robotType), 구역(zone), 세부 타겟(targetStr) 데이터 전송
+                const response = await fetch(`/control/move_goal?robot=${robotType}&zone=${zone}&target=${targetStr}`, { method: 'POST' });
+                
+                if (response.ok) {
+                    alert(`✅ ${robotName}가 ${targetName} 구역으로 이동을 시작합니다!`);
+                    document.getElementById('robot-loc').innerText = `${robotType.toUpperCase()}: ${targetName} 이동 중`;
+                } else {
+                    alert("⚠️ 로봇에 명령을 전송하지 못했습니다.");
+                }
+            } catch (error) {
+                console.error("전송 오류:", error);
+                alert("서버와 연결할 수 없습니다.");
+            }
+        }
+        // --- [수정됨] 개별 로봇 비상 정지 & 해제 (토글) 기능 ---
+        // 각 로봇의 현재 정지 상태를 기억합니다 (false: 정상 작동 중, true: 정지됨)
+        let stopStatus = { scanner: false, agv: false, amr: false };
+
+        async function toggleStopRobot(robotType, btnElement) {
+            const isCurrentlyStopped = stopStatus[robotType];
+            
+            // 정지 상태면 'resume'(해제)을 쏘고, 작동 중이면 'stop'(정지)을 쏩니다.
+            // (만약 로봇 쪽 코드가 'resume'이 아니라 'start'나 'clear'를 쓴다면 여기를 바꿔주세요!)
+            const commandStr = isCurrentlyStopped ? 'resume' : 'stop'; 
+            
+            const robotName = robotType === 'scanner' ? '스캔 로봇' : robotType.toUpperCase();
+            const actionName = isCurrentlyStopped ? '정지 해제' : '비상 정지';
+
+            if (!confirm(`[ ${robotName} ]의 ${actionName} 명령을 전송하시겠습니까?`)) return;
+
+            try {
+                // 서버로 로봇 종류(robot)와 명령(command)을 같이 보냅니다.
+                const response = await fetch(`/control/stop_robot?robot=${robotType}&command=${commandStr}`, { method: 'POST' });
+                
+                if (response.ok) {
+                    stopStatus[robotType] = !isCurrentlyStopped; // 상태 뒤집기
+
+                    // UI 시각적 업데이트
+                    if (stopStatus[robotType]) {
+                        // 정지됨 -> 버튼을 주황색 '해제' 버튼으로 변경
+                        btnElement.innerHTML = `▶ ${robotName} 정지 해제`;
+                        btnElement.style.background = '#f39c12';
+                        document.getElementById('robot-loc').innerText = `${robotName} 정지됨`;
+                    } else {
+                        // 다시 작동 -> 원래의 빨간색 '정지' 버튼으로 복구
+                        btnElement.innerHTML = `⛔ ${robotName} 비상 정지`;
+                        btnElement.style.background = '#e74c3c';
+                        document.getElementById('robot-loc').innerText = `${robotName} 대기/이동 중`;
+                    }
+                } else {
+                    alert("⚠️ 명령 전송 실패!");
+                }
+            } catch (err) {
+                console.error("전송 오류:", err);
+                alert("서버 연결 오류");
+            }
+        }
+    </script>
+</body>
+</html>
